@@ -1,0 +1,24 @@
+<div class="container mt-5">
+    <div class="row justify-content-center">
+      <div class="col-md-6">
+        <div class="card">
+          <div class="card-body">
+            <form (submit)="convertText()" class="my-4">
+              <div class="mb-3">
+                <label for="inputText" class="form-label">Text to Encode</label>
+                <input type="text" class="form-control" id="inputText" [(ngModel)]="inputText" name="inputText" required>
+              </div>
+              <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                <button type="submit" class="btn btn-primary me-2" [disabled]="isEncoding">Convert</button>
+                <button type="button" class="btn btn-secondary" (click)="cancelEncoding()" [disabled]="!isEncoding">Cancel</button>
+              </div>
+            </form>
+            <div>
+              <label for="encodedText" class="form-label">Encoded Text</label>
+              <textarea id="encodedText" class="form-control" rows="3" readonly>{{ encodedText }}</textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
