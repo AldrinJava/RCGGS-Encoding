@@ -1,50 +1,55 @@
 using Base64EncoderApi.Models;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using System.Collections.Concurrent;
 using System.Text;
 
-[ApiController]
-[Route("[controller]")]
-public class EncodingController : ControllerBase
+
+namespace Base64EncoderApi.Controllers
 {
-    private static ConcurrentDictionary<string, string> _encodedStrings = new ConcurrentDictionary<string, string>();
-
-    [HttpPost("start")]
-    public IActionResult StartEncoding([FromBody] EncodingRequest request)
+    [ApiController]
+    [Route("[controller]")]
+    public class EncodingHubs : ControllerBase
     {
-        if (request == null || string.IsNullOrEmpty(request.Input))
+        private static ConcurrentDictionary<string, string> _encodedStrings = new ConcurrentDictionary<string, string>();
+        private readonly IHubContext<EncodingHub> _hubContext;
+
+        public EncodingHubs(IHubContext<EncodingHub> hubContext)
         {
-            return BadRequest("Invalid input");
+            _hubContext = hubContext;
         }
 
-        var encodedString = Convert.ToBase64String(Encoding.UTF8.GetBytes(request.Input));
-        var requestId = Guid.NewGuid().ToString();
-        _encodedStrings.TryAdd(requestId, encodedString);
-        return Ok(requestId); // Return a unique ID for this encoding process
-    }
-
-
-    [HttpGet("get/{requestId}")]
-    public async Task<IActionResult> GetEncodedCharacter(string requestId, CancellationToken cancellationToken)
-    {
-        if (_encodedStrings.TryGetValue(requestId, out var encodedString))
+        [HttpPost("start")]
+        public IActionResult StartEncoding([FromBody] EncodingRequest request)
         {
-            if (!string.IsNullOrEmpty(encodedString))
+            if (request == null || string.IsNullOrEmpty(request.Input))
             {
-                var character = encodedString[0];
-                _encodedStrings[requestId] = encodedString.Substring(1);
-                await Task.Delay(new Random().Next(1000, 5000), cancellationToken);
-                return Ok(character.ToString());
+                return BadRequest("Invalid input");
             }
-            return Ok(); // No more characters to send
-        }
-        return NotFound();
-    }
 
-    [HttpPost("cancel/{requestId}")]
-    public IActionResult CancelEncoding(string requestId)
-    {
-        _encodedStrings.TryRemove(requestId, out _);
-        return Ok();
+            var encodedString = Convert.ToBase64String(Encoding.UTF8.GetBytes(request.Input));
+            var requestId = Guid.NewGuid().ToString();
+            _encodedStrings.TryAdd(requestId, encodedString);
+
+            Task.Run(async () =>
+            {
+                while (_encodedStrings.TryGetValue(requestId, out var remainingString) && !string.IsNullOrEmpty(remainingString))
+                {
+                    var character = remainingString[0];
+                    _encodedStrings[requestId] = remainingString.Substring(1);
+                    await _hubContext.Clients.All.SendAsync("ReceiveCharacter", character, requestId);
+                    await Task.Delay(new Random().Next(1000, 5000)); // Simulate processing delay
+                }
+            });
+
+            return Ok(requestId);
+        }
+
+        [HttpPost("cancel/{requestId}")]
+        public IActionResult CancelEncoding(string requestId)
+        {
+            _encodedStrings.TryRemove(requestId, out _);
+            return Ok();
+        }
     }
 }
